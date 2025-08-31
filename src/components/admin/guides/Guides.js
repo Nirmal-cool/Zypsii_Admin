@@ -2,14 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { FaList, FaPlus, FaEdit, FaTrash, FaEye, FaMapMarkerAlt, FaCalendar, FaTags } from 'react-icons/fa';
 import axios from 'axios';
 import GuideForm from './GuideForm';
+import DeleteConfirmModal from './DeleteConfirmModal';
+import ToggleStatusModal from './ToggleStatusModal';
 import './Guides.css';
 
 const Guides = () => {
-  const [activeView, setActiveView] = useState('list'); // 'list' or 'form'
+  const [activeView, setActiveView] = useState('list'); // 'list', 'form', or 'detail'
   const [guides, setGuides] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [editingGuide, setEditingGuide] = useState(null);
+  const [selectedGuide, setSelectedGuide] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(null); // Will store the guide ID being deleted
+  const [toggleStatusLoading, setToggleStatusLoading] = useState(null); // Will store the guide ID being toggled
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [guideToDelete, setGuideToDelete] = useState(null);
+  const [toggleStatusModalOpen, setToggleStatusModalOpen] = useState(false);
+  const [guideToToggle, setGuideToToggle] = useState(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -98,67 +110,206 @@ const Guides = () => {
   };
 
   const handleGuideClick = (guideId) => {
-    // Navigate to guide detail view
-    console.log('Navigate to guide:', guideId);
+    const guide = guides.find(g => g.id === guideId);
+    if (guide) {
+      setSelectedGuide(guide);
+      setActiveView('detail');
+    }
   };
 
   const handleEdit = (guide) => {
     setEditingGuide(guide);
     setActiveView('form');
+    setEditLoading(false);
   };
 
-  const handleDelete = async (guideId) => {
-    if (window.confirm('Are you sure you want to delete this guide?')) {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        await axios.delete(`http://localhost:3030/featured-guides/user/${guideId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        // Remove from local state
-        setGuides(prev => prev.filter(guide => guide.id !== guideId));
-        setError(null);
-        setError('Guide deleted successfully');
-        setTimeout(() => setError(null), 3000);
-      } catch (error) {
-        setError('Failed to delete guide');
-        console.error('Error deleting guide:', error);
-      }
+  const handleEditSuccess = (updatedGuide) => {
+    // Update the guide in the local state
+    setGuides(prev => prev.map(g => 
+      g.id === updatedGuide.id ? updatedGuide : g
+    ));
+    
+    // If we're editing from detail view, update the selected guide too
+    if (selectedGuide && selectedGuide.id === updatedGuide.id) {
+      setSelectedGuide(updatedGuide);
     }
+    
+    // Clear editing state and switch back to list view
+    setEditingGuide(null);
+    setActiveView('list');
+    setEditLoading(false);
+    
+    // Show success message
+    setError('Guide updated successfully!');
+    setTimeout(() => setError(null), 3000);
   };
 
-  const toggleStatus = async (guideId, currentStatus) => {
+  const handleEditFromDetail = () => {
+    setEditingGuide(selectedGuide);
+    setActiveView('form');
+    setEditLoading(false);
+  };
+
+  const handleBackToList = () => {
+    setSelectedGuide(null);
+    setActiveView('list');
+  };
+
+  const openDeleteModal = (guide) => {
+    setGuideToDelete(guide);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setGuideToDelete(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!guideToDelete) return;
+
     try {
+      setDeleteLoading(guideToDelete.id);
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
-      await axios.patch(`http://localhost:3030/featured-guides/user/${guideId}/status`, {
-        isActive: !currentStatus
-      }, {
+      const response = await axios.delete(`http://localhost:3030/featured-guides/user/delete/${guideToDelete.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
-      // Update local state
-      setGuides(prev => prev.map(guide => 
-        guide.id === guideId 
-          ? { ...guide, isActive: !currentStatus }
-          : guide
-      ));
+      if (response.data.status) {
+        // Remove from local state
+        setGuides(prev => prev.filter(guide => guide.id !== guideToDelete.id));
+        
+        // If we're in detail view and deleting the current guide, go back to list
+        if (selectedGuide && selectedGuide.id === guideToDelete.id) {
+          setSelectedGuide(null);
+          setActiveView('list');
+        }
+        
+        // Close modal and show success message
+        closeDeleteModal();
+        setSuccessMessage('Guide deleted successfully!');
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          setSuccessMessage('');
+        }, 3000);
+      } else {
+        throw new Error(response.data.message || 'Failed to delete guide');
+      }
     } catch (error) {
-      setError('Failed to update guide status');
-      console.error('Error updating guide status:', error);
+      let errorMessage = 'Failed to delete guide';
+      
+      if (error.response) {
+        // Handle API error responses
+        if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        
+        // Handle specific HTTP status codes
+        if (error.response.status === 404) {
+          errorMessage = 'Guide not found';
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid guide ID';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error occurred while deleting guide';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      console.error('Error deleting guide:', error);
+    } finally {
+      setDeleteLoading(null);
     }
   };
+
+  const openToggleStatusModal = (guide) => {
+    setGuideToToggle(guide);
+    setToggleStatusModalOpen(true);
+  };
+
+  const closeToggleStatusModal = () => {
+    setToggleStatusModalOpen(false);
+    setGuideToToggle(null);
+  };
+
+  const confirmToggleStatus = async () => {
+    if (!guideToToggle) return;
+
+    try {
+      setToggleStatusLoading(guideToToggle.id);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await axios.put(`http://localhost:3030/featured-guides/user/activate-inactive/${guideToToggle.id}`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data.status) {
+        // Update local state
+        const newStatus = !guideToToggle.isActive;
+        setGuides(prev => prev.map(guide => 
+          guide.id === guideToToggle.id 
+            ? { ...guide, isActive: newStatus }
+            : guide
+        ));
+        
+        // If we're in detail view and updating the current guide, update selectedGuide too
+        if (selectedGuide && selectedGuide.id === guideToToggle.id) {
+          setSelectedGuide(prev => ({ ...prev, isActive: newStatus }));
+        }
+        
+        // Close modal and show success message
+        closeToggleStatusModal();
+        setSuccessMessage(`Guide ${newStatus ? 'activated' : 'deactivated'} successfully!`);
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          setSuccessMessage('');
+        }, 3000);
+      } else {
+        throw new Error(response.data.message || 'Failed to update guide status');
+      }
+    } catch (error) {
+      let errorMessage = 'Failed to update guide status';
+      
+      if (error.response) {
+        // Handle API error responses
+        if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        
+        // Handle specific HTTP status codes
+        if (error.response.status === 404) {
+          errorMessage = 'Guide not found';
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid request';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error occurred while updating guide status';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      console.error('Error updating guide status:', error);
+    } finally {
+      setToggleStatusLoading(null);
+    }
+  };
+
+
 
   const renderGuidesList = () => {
     if (loading) {
@@ -190,7 +341,12 @@ const Guides = () => {
       <>
         <div className="guides-grid">
           {guides.map((guide) => (
-            <div key={guide.id} className={`guide-card ${!guide.isActive ? 'inactive' : ''}`}>
+            <div 
+              key={guide.id} 
+              className={`guide-card ${!guide.isActive ? 'inactive' : ''} ${deleteLoading === guide.id ? 'deleting' : ''} ${toggleStatusLoading === guide.id ? 'updating' : ''}`}
+              onClick={() => handleGuideClick(guide.id)}
+              style={{ cursor: (deleteLoading === guide.id || toggleStatusLoading === guide.id) ? 'not-allowed' : 'pointer' }}
+            >
               <div className="guide-image-container">
                 <img 
                   src={guide.image} 
@@ -205,6 +361,11 @@ const Guides = () => {
                     {guide.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
+                {deleteLoading === guide.id && (
+                  <div className="card-deleting-overlay">
+                    <div className="deleting-spinner"></div>
+                  </div>
+                )}
               </div>
               
               <div className="guide-content">
@@ -242,27 +403,43 @@ const Guides = () => {
                 <div className="guide-actions">
                   <button 
                     className="btn btn-view"
-                    onClick={() => handleGuideClick(guide.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleGuideClick(guide.id);
+                    }}
+                    disabled={deleteLoading === guide.id || toggleStatusLoading === guide.id}
                   >
                     <FaEye /> View
                   </button>
                   <button 
                     className="btn btn-edit"
-                    onClick={() => handleEdit(guide)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(guide);
+                    }}
+                    disabled={(editLoading && editingGuide?.id === guide.id) || deleteLoading === guide.id || toggleStatusLoading === guide.id}
                   >
-                    <FaEdit /> Edit
+                    <FaEdit /> {editLoading && editingGuide?.id === guide.id ? 'Loading...' : 'Edit'}
                   </button>
                   <button 
                     className="btn btn-toggle"
-                    onClick={() => toggleStatus(guide.id, guide.isActive)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openToggleStatusModal(guide);
+                    }}
+                    disabled={deleteLoading === guide.id || toggleStatusLoading === guide.id}
                   >
-                    {guide.isActive ? 'Deactivate' : 'Activate'}
+                    {toggleStatusLoading === guide.id ? 'Updating...' : (guide.isActive ? 'Deactivate' : 'Activate')}
                   </button>
                   <button 
                     className="btn btn-delete"
-                    onClick={() => handleDelete(guide.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDeleteModal(guide);
+                    }}
+                    disabled={deleteLoading === guide.id}
                   >
-                    <FaTrash /> Delete
+                    <FaTrash /> {deleteLoading === guide.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>
@@ -287,6 +464,148 @@ const Guides = () => {
     );
   };
 
+  const renderGuideDetail = () => {
+    if (!selectedGuide) return null;
+
+    return (
+      <div className="guide-detail-container">
+        {deleteLoading === selectedGuide.id && (
+          <div className="detail-loading-overlay">
+            <div className="loading-content">
+              <div className="spinner"></div>
+              <p>Deleting guide...</p>
+            </div>
+          </div>
+        )}
+        <div className="detail-header">
+          <button
+            className="btn btn-secondary"
+            onClick={handleBackToList}
+            disabled={deleteLoading === selectedGuide.id || toggleStatusLoading === selectedGuide.id}
+          >
+            ← Back to List
+          </button>
+
+          <div className="detail-actions">
+            <button
+              className="btn btn-edit"
+              onClick={handleEditFromDetail}
+              disabled={editLoading || deleteLoading === selectedGuide.id || toggleStatusLoading === selectedGuide.id}
+            >
+              <FaEdit /> {editLoading ? 'Loading...' : 'Edit Guide'}
+            </button>
+            <button
+              className="btn btn-toggle"
+              onClick={() => openToggleStatusModal(selectedGuide)}
+              disabled={deleteLoading === selectedGuide.id || toggleStatusLoading === selectedGuide.id}
+            >
+              {toggleStatusLoading === selectedGuide.id ? 'Updating...' : (selectedGuide.isActive ? 'Deactivate' : 'Activate')}
+            </button>
+            <button
+              className="btn btn-delete"
+              onClick={() => openDeleteModal(selectedGuide)}
+              disabled={deleteLoading === selectedGuide.id || toggleStatusLoading === selectedGuide.id}
+            >
+              <FaTrash /> {deleteLoading === selectedGuide.id ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+
+        <div className="detail-content">
+          {/* Basic Information */}
+          <div className="detail-section">
+            <div className="detail-title">
+              <h1>{selectedGuide.title}</h1>
+              <div className="detail-status">
+                <span className={`status-badge ${selectedGuide.isActive ? 'active' : 'inactive'}`}>
+                  {selectedGuide.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+
+            <div className="detail-meta">
+              <div className="meta-item">
+                <FaMapMarkerAlt />
+                <span>{selectedGuide.category}</span>
+              </div>
+              <div className="meta-item">
+                <FaCalendar />
+                <span>{new Date(selectedGuide.createdAt).toLocaleDateString()}</span>
+              </div>
+              <div className="meta-item">
+                <FaMapMarkerAlt />
+                <span>{selectedGuide.place?.name || 'Unknown Location'}</span>
+              </div>
+            </div>
+
+            <div className="detail-description">
+              <p dangerouslySetInnerHTML={{ __html: selectedGuide.description }} />
+            </div>
+          </div>
+
+          {/* Guide Image */}
+          {selectedGuide.image && (
+            <div className="detail-section">
+              <h3>📸 Guide Image</h3>
+              <div className="guide-image-detail">
+                <img
+                  src={selectedGuide.image}
+                  alt={selectedGuide.title}
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/800x400?text=Guide+Image';
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {selectedGuide.tags && selectedGuide.tags.length > 0 && (
+            <div className="detail-section">
+              <h3>🏷️ Tags</h3>
+              <div className="tags-grid">
+                {selectedGuide.tags.map((tag, index) => (
+                  <span key={index} className="tag-badge">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Additional Information */}
+          <div className="detail-section">
+            <h3>ℹ️ Additional Information</h3>
+            <div className="info-grid">
+              <div className="info-item">
+                <strong>Guide ID:</strong>
+                <span>{selectedGuide.id}</span>
+              </div>
+              <div className="info-item">
+                <strong>Category:</strong>
+                <span>{selectedGuide.category}</span>
+              </div>
+              <div className="info-item">
+                <strong>Location:</strong>
+                <span>{selectedGuide.place?.name || 'Not specified'}</span>
+              </div>
+              <div className="info-item">
+                <strong>Created:</strong>
+                <span>{new Date(selectedGuide.createdAt).toLocaleString()}</span>
+              </div>
+              <div className="info-item">
+                <strong>Status:</strong>
+                <span className={`status-text ${selectedGuide.isActive ? 'active' : 'inactive'}`}>
+                  {selectedGuide.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="guides-container">
       <div className="guides-header">
@@ -305,35 +624,66 @@ const Guides = () => {
         <button 
           className={`nav-tab ${activeView === 'form' ? 'active' : ''}`}
           onClick={() => setActiveView('form')}
+          disabled={editLoading}
         >
-          <FaPlus /> Create Guide
+          <FaPlus /> {editingGuide ? (editLoading ? 'Editing...' : 'Edit Guide') : 'Create Guide'}
         </button>
+        {selectedGuide && (
+          <button 
+            className={`nav-tab ${activeView === 'detail' ? 'active' : ''}`}
+            onClick={() => setActiveView('detail')}
+          >
+            <FaEye /> Guide Details
+          </button>
+        )}
       </div>
 
       {/* Content */}
       {activeView === 'list' ? (
         <>
-          {error === 'Guide deleted successfully' && (
-            <div className="alert alert-success">
+          {error && (
+            <div className="alert alert-error">
               <p>{error}</p>
+            </div>
+          )}
+          {success && (
+            <div className="alert alert-success">
+              <p>{successMessage}</p>
             </div>
           )}
           {renderGuidesList()}
         </>
+      ) : activeView === 'detail' ? (
+        renderGuideDetail()
       ) : (
         <GuideForm 
           guide={editingGuide}
-          onSuccess={() => {
-            setActiveView('list');
-            setEditingGuide(null);
-            fetchGuides();
-          }}
+          onSuccess={handleEditSuccess}
           onCancel={() => {
             setActiveView('list');
             setEditingGuide(null);
           }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDelete}
+        guideTitle={guideToDelete?.title || ''}
+        loading={deleteLoading !== null}
+      />
+
+      {/* Toggle Status Confirmation Modal */}
+      <ToggleStatusModal
+        isOpen={toggleStatusModalOpen}
+        onClose={closeToggleStatusModal}
+        onConfirm={confirmToggleStatus}
+        guideTitle={guideToToggle?.title || ''}
+        currentStatus={guideToToggle?.isActive || false}
+        loading={toggleStatusLoading !== null}
+      />
     </div>
   );
 };

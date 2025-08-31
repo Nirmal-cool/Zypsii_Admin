@@ -395,20 +395,18 @@ const EditPlace = ({ place, onSave, onCancel, onDelete }) => {
 
   // Handle delete
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this place? This action cannot be undone.')) {
-      try {
-        setLoading(true);
-        await api.delete(`/admin/places/${place._id}`);
-        
-        if (onDelete) {
-          onDelete(place._id);
-        }
-      } catch (error) {
-        console.error('Delete error:', error);
-        setError('Failed to delete place');
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+      await api.delete(`/admin/places/${place._id}`);
+      
+      if (onDelete) {
+        onDelete(place._id);
       }
+    } catch (error) {
+      console.error('Delete error:', error);
+      setError('Failed to delete place');
+    } finally {
+      setLoading(false);
     }
   };
 

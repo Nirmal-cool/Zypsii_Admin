@@ -254,7 +254,7 @@ const GuideForm = ({ guide, onSuccess, onCancel }) => {
       }
 
       const endpoint = guide 
-        ? `http://localhost:3030/featured-guides/user/${guide.id}`
+        ? `http://localhost:3030/featured-guides/user/edit/${guide.id}`
         : 'http://localhost:3030/featured-guides/user/add';
       
       const method = guide ? 'PUT' : 'POST';
@@ -273,30 +273,61 @@ const GuideForm = ({ guide, onSuccess, onCancel }) => {
       
       if (response.data.status || response.status === 200) {
         setSuccess(true);
-        // Reset form
-        setFormData({
-          title: '',
-          category: '',
-          description: '',
-          image: '',
-          tags: [],
-          placeId: '',
-          isActive: true
-        });
-        setSelectedFile(null);
-        setSelectedPlace(null);
-        setPlaceSearch('');
-        setSearchResults([]);
-        setShowDropdown(false);
-        setTimeout(() => {
-          setSuccess(false);
-          if (onSuccess) onSuccess();
-        }, 2000);
+        
+        if (guide) {
+          // If editing, pass the updated guide data back
+          const updatedGuide = {
+            ...guide,
+            ...response.data.data,
+            id: guide.id // Ensure we keep the original ID
+          };
+          
+          setTimeout(() => {
+            setSuccess(false);
+            if (onSuccess) onSuccess(updatedGuide);
+          }, 2000);
+        } else {
+          // If creating new, reset form and call onSuccess
+          setFormData({
+            title: '',
+            category: '',
+            description: '',
+            image: '',
+            tags: [],
+            placeId: '',
+            isActive: true
+          });
+          setSelectedFile(null);
+          setSelectedPlace(null);
+          setPlaceSearch('');
+          setSearchResults([]);
+          setShowDropdown(false);
+          setTimeout(() => {
+            setSuccess(false);
+            if (onSuccess) onSuccess();
+          }, 2000);
+        }
       } else {
         throw new Error(response.data.message || 'Failed to save guide');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred while saving the guide');
+      let errorMessage = 'An error occurred while saving the guide';
+      
+      if (err.response) {
+        // Handle API validation errors
+        if (err.response.data && err.response.data.message) {
+          errorMessage = err.response.data.message;
+        }
+        
+        // Handle validation errors array
+        if (err.response.data && err.response.data.error && Array.isArray(err.response.data.error)) {
+          errorMessage = err.response.data.error.join(', ');
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

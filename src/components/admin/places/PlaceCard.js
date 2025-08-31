@@ -16,7 +16,7 @@ const PlaceCard = React.memo(({
 
   const handleDelete = (e) => {
     e.stopPropagation();
-    onDelete(place._id);
+    onDelete(place);
   };
 
   const handleToggleStatus = (e) => {

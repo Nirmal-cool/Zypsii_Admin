@@ -9,6 +9,7 @@ import FiltersSection from './FiltersSection';
 import Pagination from './Pagination';
 import NoResultsSection from './NoResultsSection';
 import EditPlace from './EditPlace';
+import DeleteConfirmModal from './DeleteConfirmModal';
 import './places.css';
 
 const Places = () => {
@@ -92,6 +93,10 @@ const Places = () => {
   const [selectedFiles, setSelectedFiles] = useState({});
   const [isUploading, setIsUploading] = useState({});
   const [isDragOver, setIsDragOver] = useState({});
+
+  // Delete modal states
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [placeToDelete, setPlaceToDelete] = useState(null);
 
   // Memoized data to prevent unnecessary re-renders
   const memoizedPlaces = useMemo(() => places, [places]);
@@ -868,31 +873,52 @@ const Places = () => {
   }, []);
 
   const handleDelete = useCallback(async (placeId) => {
-    if (window.confirm('Are you sure you want to delete this place?')) {
-      try {
-        // Check authentication
-        if (!isAuthenticated || !user) {
-          throw new Error('Authentication required');
-        }
-
-        await api.delete(`/admin/places/${placeId}`);
-
-        // Remove from local state
-        setPlaces(prev => prev.filter(place => place._id !== placeId));
-        setSuccess('Place deleted successfully');
-        setTimeout(() => setSuccess(false), 3000);
-      } catch (error) {
-        console.error('Error deleting place:', error);
-
-        // Handle authentication errors
-        if (handleAuthError(error)) {
-          return;
-        }
-
-        setError('Failed to delete place');
+    try {
+      // Check authentication
+      if (!isAuthenticated || !user) {
+        throw new Error('Authentication required');
       }
+
+      await api.delete(`/admin/delete-place/${placeId}`);
+
+      // Remove from local state
+      setPlaces(prev => prev.filter(place => place._id !== placeId));
+      setSuccess('Place deleted successfully');
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error deleting place:', error);
+
+      // Handle authentication errors
+      if (handleAuthError(error)) {
+        return;
+      }
+
+      setError('Failed to delete place');
     }
   }, [isAuthenticated, user]);
+
+  const openDeleteModal = useCallback((place) => {
+    setPlaceToDelete(place);
+    setDeleteModalOpen(true);
+  }, []);
+
+  const closeDeleteModal = useCallback(() => {
+    setDeleteModalOpen(false);
+    setPlaceToDelete(null);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (placeToDelete) {
+      await handleDelete(placeToDelete._id);
+      closeDeleteModal();
+      
+      // If we're in edit view, switch back to list view
+      if (activeView === 'edit') {
+        setEditingPlace(null);
+        setActiveView('list');
+      }
+    }
+  }, [placeToDelete, handleDelete, closeDeleteModal, activeView]);
 
   const toggleStatus = useCallback(async (placeId, currentStatus) => {
     try {
@@ -952,22 +978,7 @@ const Places = () => {
     setActiveView('list');
   }, []);
 
-  const handleEditDelete = useCallback((placeId) => {
-    // Remove from local state
-    setPlaces(prev => prev.filter(place => place._id !== placeId));
-    
-    // Clear editing state and switch back to list view
-    setEditingPlace(null);
-    setActiveView('list');
-    
-    // Show success message
-    setSuccessMessage('Place deleted successfully!');
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setSuccessMessage('');
-    }, 3000);
-  }, []);
+
 
   const renderPlacesList = () => {
     // Show loading if authentication is still loading
@@ -1065,7 +1076,7 @@ const Places = () => {
                 places={memoizedPlaces}
                 onCardClick={handlePlaceClick}
                 onEdit={handleEdit}
-                onDelete={handleDelete}
+                onDelete={openDeleteModal}
                 onToggleStatus={toggleStatus}
               />
             )}
@@ -1441,14 +1452,14 @@ const Places = () => {
               className="btn btn-edit"
               onClick={() => {
                 setEditingPlace(selectedPlace);
-                setActiveView('form');
+                setActiveView('edit');
               }}
             >
               <FaEdit /> Edit Place
             </button>
             <button
               className="btn btn-delete"
-              onClick={() => handleDelete(selectedPlace._id)}
+              onClick={() => openDeleteModal(selectedPlace)}
             >
               <FaTrash /> Delete
             </button>
@@ -1479,24 +1490,24 @@ const Places = () => {
                 <span>{selectedPlace.category}</span>
               </div>
               <div className="meta-item">
-                <span className="rating">★ {selectedPlace.rating}</span>
+                <span className="rating">★ {selectedPlace.rating || 0}</span>
               </div>
               <div className="meta-item">
-                <span className="price-range">{selectedPlace.priceRange}</span>
+                <span className="price-range">{selectedPlace.priceRange || 'Not specified'}</span>
               </div>
               <div className="meta-item">
-                <span className="difficulty">{selectedPlace.difficulty}</span>
+                <span className="difficulty">{selectedPlace.difficulty || 'Not specified'}</span>
               </div>
             </div>
 
             <div className="detail-description">
-              <p>{selectedPlace.description}</p>
+              <p>{selectedPlace.description || 'No description available.'}</p>
             </div>
           </div>
 
           {/* Location Information */}
           <div className="detail-section">
-            <h3>Location Details</h3>
+            <h3>📍 Location Details</h3>
             <div className="location-grid">
               <div className="location-item">
                 <strong>Address:</strong>
@@ -1528,7 +1539,7 @@ const Places = () => {
 
           {/* Additional Details */}
           <div className="detail-section">
-            <h3>Additional Information</h3>
+            <h3>ℹ️ Additional Information</h3>
             <div className="details-grid">
               <div className="detail-item">
                 <strong>Entry Fee:</strong>
@@ -1555,9 +1566,9 @@ const Places = () => {
           </div>
 
           {/* Images */}
-          {selectedPlace.images && selectedPlace.images.length > 0 && (
+          {selectedPlace.images && selectedPlace.images.length > 0 ? (
             <div className="detail-section">
-              <h3>Images</h3>
+              <h3>📸 Images ({selectedPlace.images.length})</h3>
               <div className="images-grid">
                 {selectedPlace.images.map((image, index) => (
                   <div key={index} className="image-item">
@@ -1566,26 +1577,45 @@ const Places = () => {
                       alt={image.alt || `Image ${index + 1}`}
                       onError={(e) => {
                         e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
                       }}
                     />
+                    <div className="image-placeholder" style={{ display: 'none' }}>
+                      <FaImage />
+                      <span>Image not available</span>
+                    </div>
                     {image.alt && <p className="image-caption">{image.alt}</p>}
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : (
+            <div className="detail-section">
+              <h3>📸 Images</h3>
+              <div className="no-images">
+                <FaImage />
+                <p>No images available for this place</p>
               </div>
             </div>
           )}
 
           {/* Opening Hours */}
           <div className="detail-section">
-            <h3>Opening Hours</h3>
-            <div className="hours-grid">
-              {selectedPlace.openingHours && Object.entries(selectedPlace.openingHours).map(([day, hours]) => (
-                <div key={day} className="hour-item">
-                  <strong>{day.charAt(0).toUpperCase() + day.slice(1)}:</strong>
-                  <span>{hours}</span>
-                </div>
-              ))}
-            </div>
+            <h3>🕒 Opening Hours</h3>
+            {selectedPlace.openingHours && Object.keys(selectedPlace.openingHours).length > 0 ? (
+              <div className="hours-grid">
+                {Object.entries(selectedPlace.openingHours).map(([day, hours]) => (
+                  <div key={day} className="hour-item">
+                    <strong>{day.charAt(0).toUpperCase() + day.slice(1)}:</strong>
+                    <span>{hours || 'Closed'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-hours">
+                <p>No opening hours information available</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1631,10 +1661,18 @@ const Places = () => {
            place={editingPlace}
            onSave={handleEditSave}
            onCancel={handleEditCancel}
-           onDelete={handleEditDelete}
+           onDelete={openDeleteModal}
          />
        ) : 
        renderPlaceDetail()}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDelete}
+        placeName={placeToDelete?.name || ''}
+      />
     </div>
   );
 };
