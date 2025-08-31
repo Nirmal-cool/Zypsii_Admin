@@ -1,0 +1,37 @@
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f8fafc;
+}
+
+.admin-layout.collapsed .admin-main-content {
+  margin-left: 80px;
+}
+
+.admin-main-content {
+  flex: 1;
+  margin-left: 280px;
+  transition: margin-left 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .admin-main-content {
+    margin-left: 0;
+  }
+  
+  .admin-layout.collapsed .admin-main-content {
+    margin-left: 0;
+  }
+  
+  .admin-content {
+    padding: 16px;
+  }
+}

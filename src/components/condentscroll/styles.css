@@ -1,0 +1,67 @@
+/* General Styles */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 15px;
+  overflow-x: hidden;
+} 
+
+/* Image Styling */
+.travel-image {
+  width: 100%;
+  max-width: 250px;
+  height: auto;
+  border-radius: 10px;
+  display: block;
+  margin: auto;
+  object-fit: contain;
+}
+
+/* Section Styling */
+.travel-section {
+  padding: 50px 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Responsive Padding */
+@media (max-width: 768px) {
+  .travel-section {
+    padding: 30px 0;
+  }
+  
+  .mobile {
+    margin-top: 10px;
+  }
+  
+  .travel-image {
+    max-width: 80%;
+    height: auto;
+  }
+
+  .container {
+    padding: 0 10px;
+  }
+}
+
+/* AOS Animation Enhancements */
+[data-aos] {
+  transition: transform 0.8s ease-out, opacity 0.8s ease-out !important;
+}
+
+[data-aos="fade-right"] {
+  transform: translateX(-50px);
+  opacity: 0;
+}
+
+[data-aos="fade-left"] {
+  transform: translateX(50px);
+  opacity: 0;
+}
+
+[data-aos].aos-animate {
+  transform: translateX(0);
+  opacity: 1;
+}
+
