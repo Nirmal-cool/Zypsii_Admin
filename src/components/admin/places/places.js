@@ -270,19 +270,7 @@ const Places = () => {
     if (isAuthenticated && activeView === 'list') {
       fetchPlacesDirect(1);
     }
-  }, [authLoading, isAuthenticated, activeView, places.length]); // Include authLoading
-
-  // Initial data fetch when authentication changes
-  useEffect(() => {
-    // Wait for authentication to complete
-    if (authLoading) {
-      return;
-    }
-
-    if (isAuthenticated && activeView === 'list' && places.length === 0) {
-      fetchPlacesDirect(1);
-    }
-  }, [authLoading, isAuthenticated, activeView, places.length]); // Include authLoading
+  }, [authLoading, isAuthenticated, activeView]); // Removed places.length to prevent re-fetching
 
   // Effect for pagination changes - immediate fetch
   useEffect(() => {
@@ -317,45 +305,27 @@ const Places = () => {
     // Update the ref for next comparison
     previousFiltersRef.current = currentFilters;
 
-    // Different behavior for search vs other filters
-    // Check if search has actually changed from previous value
-    const previousSearch = previousFilters ? JSON.parse(previousFilters).search : '';
-    const searchChanged = filters.search !== previousSearch;
+    // Clear any existing search timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
 
-    if (searchChanged) {
-      // Search input: Add 1 second delay (for both typing and clearing)
-      // Clear any existing search timeout
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
+    // Set search pending state for all filter changes
+    setSearchPending(true);
+    setFilterLoading(false);
 
-      // Set search pending state
-      setSearchPending(true);
-      setFilterLoading(false);
-
-      searchTimeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          // Clear pending state and set loading
-          setSearchPending(false);
-          setFilterLoading(true);
-          // Reset to first page when search changes
-          setPagination(prev => ({ ...prev, currentPage: 1 }));
-          // Fetch with new search after delay
-          fetchPlacesDirect(1);
-        }
-      }, 1000); // 1 second delay for search
-    } else if (filters.category !== 'all' || filters.isActive !== 'all' || filters.featured !== 'all') {
-      // Other filters: Instant API call
+    // Add delay for all filter changes to prevent too many requests
+    searchTimeoutRef.current = setTimeout(() => {
       if (isMountedRef.current) {
-        // Set filter loading state
-        setFilterLoading(true);
+        // Clear pending state and set loading
         setSearchPending(false);
+        setFilterLoading(true);
         // Reset to first page when filters change
         setPagination(prev => ({ ...prev, currentPage: 1 }));
-        // Fetch with new filters immediately
+        // Fetch with new filters after delay
         fetchPlacesDirect(1);
       }
-    }
+    }, 1500); // Increased delay to 1.5 seconds to prevent rate limiting
   }, [filters.search, filters.category, filters.isActive, filters.featured, authLoading, isAuthenticated, activeView, loading]);
 
   // Direct fetch function to avoid dependency issues
@@ -365,6 +335,9 @@ const Places = () => {
       if (!isMountedRef.current) {
         return;
       }
+
+      // Add a small delay to prevent rapid successive calls
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       setLoading(true);
       setFilterLoading(false); // Clear filter loading when fetch starts
@@ -1020,19 +993,6 @@ const Places = () => {
 
     return (
       <>
-        {/* User Info and Logout */}
-        <div className="user-info-section">
-          <div className="user-details">
-            <FaUser />
-            <span>Welcome, {user?.name || user?.email || 'Admin'}</span>
-          </div>
-          <button
-            className="btn btn-logout"
-            onClick={handleLogout}
-          >
-            <FaSignOutAlt /> Logout
-          </button>
-        </div>
 
         {/* Authentication Error Alert */}
         {authError && (
@@ -1064,7 +1024,7 @@ const Places = () => {
                 <div className="pending-indicator">
                   <div className="pending-dot-large"></div>
                 </div>
-                <p>Search pending... (1 second delay)</p>
+                <p>Search pending... (1.5 second delay to prevent rate limiting)</p>
               </div>
             ) : filterLoading ? (
               <div className="cards-loading">

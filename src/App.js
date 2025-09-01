@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute, Login, AdminLayout, Dashboard } from "./components/admin";
 
-import { Places, Guides } from "./components/admin";
+import { Places, Guides, YouTube } from "./components/admin";
 
 import './App.css';
 import './index.css'; // Import global styles
@@ -66,6 +66,14 @@ const App = () => {
             <ProtectedRoute>
               <AdminLayout>
                 <Guides />
+              </AdminLayout>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin/youtube" element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <YouTube />
               </AdminLayout>
             </ProtectedRoute>
           } />

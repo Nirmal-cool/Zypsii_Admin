@@ -57,7 +57,7 @@
 .form-field select:focus,
 .form-field textarea:focus {
   outline: none;
-  border-color: #7c3aed;
+  border-color: #e406f0;
   background-color: white;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
@@ -124,7 +124,7 @@
 }
 
 .file-upload-label:hover {
-  border-color: #7c3aed;
+  border-color: #e406f0;
   background-color: rgba(124, 58, 237, 0.05);
 }
 
@@ -155,7 +155,7 @@
 }
 
 .file-upload-label:hover .upload-icon {
-  color: #7c3aed;
+  color: #e406f0;
 }
 
 .selected-file-name {
@@ -178,7 +178,7 @@
 }
 
 .upload-status.uploading {
-  color: #7c3aed;
+  color: #e406f0;
   font-weight: 500;
 }
 
@@ -212,7 +212,7 @@
 
 .place-search-container input:focus {
   outline: none;
-  border-color: #7c3aed;
+  border-color: #e406f0;
   background-color: white;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
@@ -228,7 +228,7 @@
   width: 16px;
   height: 16px;
   border: 2px solid #e5e7eb;
-  border-top: 2px solid #7c3aed;
+  border-top: 2px solid #e406f0;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -278,7 +278,7 @@
   margin-top: 12px;
   padding: 12px 16px;
   background-color: #f8fafc;
-  border: 1px solid #7c3aed;
+  border: 1px solid #e406f0;
   border-radius: 8px;
 }
 
@@ -340,7 +340,7 @@
 }
 
 .btn-add-tag {
-  background-color: #7c3aed;
+  background-color: #e406f0;
   color: white;
   padding: 12px 16px;
   white-space: nowrap;
@@ -358,7 +358,7 @@
 
 .tag {
   background-color: rgba(124, 58, 237, 0.1);
-  color: #7c3aed;
+  color: #e406f0;
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 14px;
@@ -371,7 +371,7 @@
 .tag-remove {
   background: none;
   border: none;
-  color: #7c3aed;
+  color: #e406f0;
   cursor: pointer;
   font-size: 16px;
   font-weight: bold;
@@ -399,7 +399,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  background: linear-gradient(135deg, #e406f0, #8b5cf6);
   color: white;
   padding: 16px 32px;
   font-size: 16px;
@@ -408,7 +408,7 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  background: linear-gradient(135deg, #6d28d9, #e406f0);
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
 }

@@ -64,4 +64,14 @@ export const placesAPI = {
   deletePlace: (id) => api.delete(`/admin/places/${id}`),
 };
 
+// YouTube API endpoints
+export const youtubeAPI = {
+  getAllVideos: (params) => api.get('/youtube-video-list/all', { params }),
+  getVideoById: (id) => api.get(`/youtube-video/${id}`),
+  createVideo: (data) => api.post('/youtube-video/add', data),
+  updateVideo: (id, data) => api.put(`/youtube-video/update/${id}`, data),
+  deleteVideo: (id) => api.delete(`/youtube-video/delete/${id}`),
+  toggleStatus: (id) => api.put(`/youtube-video/activate-inactive/${id}`),
+};
+
 export default api;

@@ -20,3 +20,6 @@ export {
   NoResultsSection,
   EditPlace
 } from './places';
+
+// YouTube Components
+export { YouTube } from './youtube';

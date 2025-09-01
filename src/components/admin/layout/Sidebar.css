@@ -4,7 +4,7 @@
   top: 0;
   height: 100vh;
   width: 280px;
-  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
   color: white;
   transition: width 0.3s ease;
   z-index: 1000;
@@ -70,7 +70,7 @@
 .nav-item.active {
   background-color: rgba(255, 255, 255, 0.15);
   color: white;
-  border-left-color: #3498db;
+  border-left-color: #e406f0;
 }
 
 .nav-icon {
@@ -109,8 +109,8 @@
 }
 
 .logout-button:hover {
-  background-color: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
+  background-color: rgba(228, 6, 240, 0.2);
+  color: #e406f0;
 }
 
 @media (max-width: 768px) {

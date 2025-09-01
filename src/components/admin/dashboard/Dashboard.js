@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   FaUsers, 
   FaMapMarkerAlt, 
-  FaChartLine, 
-  FaEye,
   FaCalendarAlt,
-  FaClock,
-  FaPlay,
   FaFileAlt,
   FaVideo
 } from 'react-icons/fa';
+import axios from 'axios';
+import UsersList from './UsersList';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -19,59 +17,81 @@ const Dashboard = () => {
     totalPosts: 0,
     totalReels: 0,
     totalSchedules: 0,
-    activeUsers: 0
+    topPlaces: 0,
+    totalGuides: 0,
+    totalYoutubeVideos: 0
   });
 
-  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Function to fetch count for a specific type
+  const fetchCount = async (countType) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await axios.get(`http://localhost:3030/dashboard-count/total-counts/${countType}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch count');
+      }
+    } catch (error) {
+      console.error(`Error fetching ${countType} count:`, error);
+      return 0; // Return 0 if there's an error
+    }
+  };
+
+  // Function to fetch all counts
+  const fetchAllCounts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch all counts in parallel
+      const [users, places, posts, reels, schedules, guides, youtubeVideos] = await Promise.all([
+        fetchCount('users'),
+        fetchCount('places'),
+        fetchCount('posts'),
+        fetchCount('reels'),
+        fetchCount('schedules'),
+        fetchCount('guides'),
+        fetchCount('youtubeVideos')
+      ]);
+
+      setStats({
+        totalUsers: users,
+        totalPlaces: places,
+        totalPosts: posts,
+        totalReels: reels,
+        totalSchedules: schedules,
+        topPlaces: guides, // Using guides count for top places
+        totalGuides: guides,
+        totalYoutubeVideos: youtubeVideos
+      });
+
+
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      setStats({
-        totalUsers: 1247,
-        totalPlaces: 89,
-        totalPosts: 567,
-        totalReels: 234,
-        totalSchedules: 156,
-        activeUsers: 234
-      });
-      
-      setRecentActivity([
-        {
-          id: 1,
-          type: 'user',
-          message: 'New user registered: john.doe@example.com',
-          time: '2 minutes ago'
-        },
-        {
-          id: 2,
-          type: 'place',
-          message: 'New place added: Central Park Restaurant',
-          time: '15 minutes ago'
-        },
-        {
-          id: 3,
-          type: 'post',
-          message: 'New post created: Travel to Paris',
-          time: '1 hour ago'
-        },
-        {
-          id: 4,
-          type: 'reel',
-          message: 'New reel uploaded: Sunset at Beach',
-          time: '45 minutes ago'
-        },
-        {
-          id: 5,
-          type: 'schedule',
-          message: 'New schedule created: Weekend Trip',
-          time: '30 minutes ago'
-        }
-      ]);
-      
-      setLoading(false);
-    }, 1000);
+    fetchAllCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
@@ -79,6 +99,19 @@ const Dashboard = () => {
       <div className="dashboard-loading">
         <div className="loading-spinner"></div>
         <p>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard-error">
+        <div className="error-message">
+          <p>{error}</p>
+          <button onClick={fetchAllCounts} className="retry-button">
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -143,38 +176,39 @@ const Dashboard = () => {
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon active">
-            <FaChartLine />
+          <div className="stat-icon top-places">
+            <FaMapMarkerAlt />
           </div>
           <div className="stat-content">
-            <h3>{stats.activeUsers.toLocaleString()}</h3>
-            <p>Active Users</p>
+            <h3>{stats.topPlaces.toLocaleString()}</h3>
+            <p>Top Places</p>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon guides">
+            <FaFileAlt />
+          </div>
+          <div className="stat-content">
+            <h3>{stats.totalGuides.toLocaleString()}</h3>
+            <p>Total Guides</p>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon youtube">
+            <FaVideo />
+          </div>
+          <div className="stat-content">
+            <h3>{stats.totalYoutubeVideos.toLocaleString()}</h3>
+            <p>YouTube Videos</p>
           </div>
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Users List */}
       <div className="dashboard-section">
-        <h3>Recent Activity</h3>
-        <div className="activity-list">
-          {recentActivity.map((activity) => (
-            <div key={activity.id} className="activity-item">
-              <div className={`activity-icon ${activity.type}`}>
-                {activity.type === 'user' && <FaUsers />}
-                {activity.type === 'place' && <FaMapMarkerAlt />}
-                {activity.type === 'post' && <FaFileAlt />}
-                {activity.type === 'reel' && <FaVideo />}
-                {activity.type === 'schedule' && <FaCalendarAlt />}
-              </div>
-              <div className="activity-content">
-                <p>{activity.message}</p>
-                <span className="activity-time">
-                  <FaClock /> {activity.time}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <UsersList />
       </div>
     </div>
   );

@@ -402,16 +402,6 @@ const Guides = () => {
                 
                 <div className="guide-actions">
                   <button 
-                    className="btn btn-view"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleGuideClick(guide.id);
-                    }}
-                    disabled={deleteLoading === guide.id || toggleStatusLoading === guide.id}
-                  >
-                    <FaEye /> View
-                  </button>
-                  <button 
                     className="btn btn-edit"
                     onClick={(e) => {
                       e.stopPropagation();

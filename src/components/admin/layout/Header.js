@@ -20,11 +20,6 @@ const Header = ({ onToggleSidebar, onLogout }) => {
       
       <div className="header-right">
         <div className="header-actions">
-          <button className="notification-btn">
-            <FaBell />
-            <span className="notification-badge">3</span>
-          </button>
-          
           <div className="user-menu">
             <div className="user-info">
               <div className="user-avatar">
@@ -33,17 +28,6 @@ const Header = ({ onToggleSidebar, onLogout }) => {
               <div className="user-details">
                 <span className="user-name">{user?.email || 'Admin User'}</span>
                 <span className="user-role">{user?.role || 'Administrator'}</span>
-              </div>
-            </div>
-            
-            <div className="user-dropdown">
-              <button className="dropdown-toggle">
-                <FaBars />
-              </button>
-              <div className="dropdown-menu">
-                <button onClick={onLogout} className="dropdown-item">
-                  Logout
-                </button>
               </div>
             </div>
           </div>

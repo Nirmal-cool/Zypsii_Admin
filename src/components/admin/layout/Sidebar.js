@@ -6,7 +6,8 @@ import {
   FaSignOutAlt,
   FaBars,
   FaTimes,
-  FaBook
+  FaBook,
+  FaYoutube
 } from 'react-icons/fa';
 import './Sidebar.css';
 
@@ -31,6 +32,12 @@ const Sidebar = ({ collapsed, currentPath, onLogout }) => {
       path: '/admin/guides',
       icon: <FaBook />,
       label: 'Guides',
+      exact: false
+    },
+    {
+      path: '/admin/youtube',
+      icon: <FaYoutube />,
+      label: 'YouTube',
       exact: false
     }
   ];
