@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { FaPlus, FaTrash, FaMapMarkerAlt, FaEye, FaTimes, FaEdit, FaList, FaChevronLeft, FaChevronRight, FaSignOutAlt, FaUser, FaUpload, FaImage } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaMapMarkerAlt, FaTimes, FaEdit, FaList, FaChevronLeft, FaUpload, FaImage } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import api from '../../../services/api';
 import axios from 'axios';
-import PlaceCard from './PlaceCard';
 import PlacesGrid from './PlacesGrid';
 import FiltersSection from './FiltersSection';
 import Pagination from './Pagination';
@@ -97,21 +96,46 @@ const Places = () => {
   // Delete modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [placeToDelete, setPlaceToDelete] = useState(null);
+  
+  // Lazy loading states
+  const [isLazyLoading, setIsLazyLoading] = useState(false);
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
   // Memoized data to prevent unnecessary re-renders
   const memoizedPlaces = useMemo(() => places, [places]);
   const memoizedPagination = useMemo(() => pagination, [pagination]);
   const memoizedFilters = useMemo(() => filters, [filters]);
 
-  // Optimized API call with rapid response handling
-  const fetchPlaces = useCallback(async (page = 1) => {
+  // Handle authentication errors
+  const handleAuthError = useCallback((error) => {
+    if (error.response?.status === 401) {
+      setAuthError('Your session has expired. Please log in again.');
+      setTimeout(() => {
+        logout();
+      }, 2000);
+      return true;
+    }
+    return false;
+  }, [logout]);
+
+  // Direct fetch function to avoid dependency issues
+  const fetchPlacesDirect = useCallback(async (page = 1, isLazyLoad = false) => {
     try {
       // Check if component is still mounted
       if (!isMountedRef.current) {
         return;
       }
 
-      setLoading(true);
+      // Add a small delay to prevent rapid successive calls
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (!isLazyLoad) {
+        setLoading(true);
+        setIsLazyLoading(false);
+      } else {
+        setIsLazyLoading(true);
+        setLoading(false);
+      }
       setFilterLoading(false); // Clear filter loading when fetch starts
       setError(null);
       setAuthError(null);
@@ -131,18 +155,26 @@ const Places = () => {
         offset: offset.toString()
       });
 
+      // Get current filters from state (not from closure)
+      const currentFilters = {
+        search: filters.search,
+        category: filters.category,
+        isActive: filters.isActive,
+        featured: filters.featured
+      };
+
       // Add filters if they're not 'all'
-      if (filters.search) {
-        queryParams.append('search', filters.search);
+      if (currentFilters.search && currentFilters.search.trim()) {
+        queryParams.append('search', currentFilters.search.trim());
       }
-      if (filters.category && filters.category !== 'all') {
-        queryParams.append('category', filters.category);
+      if (currentFilters.category !== 'all') {
+        queryParams.append('category', currentFilters.category);
       }
-      if (filters.isActive !== 'all') {
-        queryParams.append('isActive', filters.isActive);
+      if (currentFilters.isActive !== 'all') {
+        queryParams.append('isActive', currentFilters.isActive);
       }
-      if (filters.featured !== 'all') {
-        queryParams.append('featured', filters.featured);
+      if (currentFilters.featured !== 'all') {
+        queryParams.append('featured', currentFilters.featured);
       }
 
       // Get token manually to ensure it's available
@@ -178,7 +210,17 @@ const Places = () => {
         }
 
         // Rapid state update for better UX
-        setPlaces(response.data.data.places || []);
+        if (isLazyLoad && page > 1) {
+          // For lazy loading, append new places to existing ones
+          setPlaces(prev => [...prev, ...(response.data.data.places || [])]);
+        } else {
+          // For regular loading, replace all places
+          setPlaces(response.data.data.places || []);
+        }
+        
+        // Mark that initial load is complete
+        setHasInitialLoad(true);
+        
         setPagination(prev => ({
           ...prev,
           currentPage: page,
@@ -245,9 +287,174 @@ const Places = () => {
       // Only set loading to false if component is still mounted
       if (isMountedRef.current) {
         setLoading(false);
+        setIsLazyLoading(false);
       }
     }
-  }, [isAuthenticated, user, pagination.limit, filters]);
+  }, [isAuthenticated, user, pagination.limit, filters.search, filters.category, filters.isActive, filters.featured, handleAuthError]);
+
+  // Optimized API call with rapid response handling
+  const fetchPlaces = useCallback(async (page = 1, isLazyLoad = false) => {
+    try {
+      // Check if component is still mounted
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      if (!isLazyLoad) {
+        setLoading(true);
+        setIsLazyLoading(false);
+      } else {
+        setIsLazyLoading(true);
+        setLoading(false);
+      }
+      setFilterLoading(false); // Clear filter loading when fetch starts
+      setError(null);
+      setAuthError(null);
+
+      // Check if user is authenticated
+      if (!isAuthenticated || !user) {
+        throw new Error('Authentication required');
+      }
+
+      // Calculate offset based on page
+      const limit = pagination.limit;
+      const offset = (page - 1) * limit;
+
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        limit: limit.toString(),
+        offset: offset.toString()
+      });
+
+      // Add search parameter - this is the key fix for search functionality
+      if (filters.search && filters.search.trim()) {
+        queryParams.append('search', filters.search.trim());
+      }
+      
+      // Add other filters if they're not 'all'
+      if (filters.category && filters.category !== 'all') {
+        queryParams.append('category', filters.category);
+      }
+      if (filters.isActive !== 'all') {
+        queryParams.append('isActive', filters.isActive);
+      }
+      if (filters.featured !== 'all') {
+        queryParams.append('featured', filters.featured);
+      }
+
+      // Get token manually to ensure it's available
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Validate token format
+      if (typeof token !== 'string' || token.length < 10) {
+        throw new Error('Invalid token format');
+      }
+
+      // Try using the API service first
+      let response;
+      try {
+        response = await api.get(`/admin/places-list?${queryParams}`);
+      } catch (apiError) {
+        // Fallback: use axios directly with explicit headers
+        const token = localStorage.getItem('token');
+        response = await axios.get(`http://localhost:3030/admin/places-list?${queryParams}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+
+      if (response.data.success) {
+        // Check if component is still mounted before setting state
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        // Rapid state update for better UX
+        if (isLazyLoad && page > 1) {
+          // For lazy loading, append new places to existing ones
+          setPlaces(prev => [...prev, ...(response.data.data.places || [])]);
+        } else {
+          // For regular loading, replace all places
+          setPlaces(response.data.data.places || []);
+        }
+        
+        // Mark that initial load is complete
+        setHasInitialLoad(true);
+        setPagination(prev => ({
+          ...prev,
+          currentPage: page,
+          totalPages: response.data.data.pagination.totalPages,
+          totalCount: response.data.data.pagination.totalCount,
+          offset: response.data.data.pagination.offset,
+          hasNextPage: response.data.data.pagination.hasNextPage,
+          hasPrevPage: response.data.data.pagination.hasPrevPage
+        }));
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch places');
+      }
+    } catch (error) {
+      console.error('Error fetching places:', error);
+
+      // Check if component is still mounted before setting state
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      // Handle authentication errors
+      if (handleAuthError(error)) {
+        return;
+      }
+
+      setError(error.message || 'Failed to fetch places');
+      // For demo purposes, set some sample data
+      setPlaces([
+        {
+          _id: 1,
+          name: 'Central Park Restaurant',
+          category: 'Restaurant',
+          location: { city: 'New York', state: 'NY' },
+          rating: 4.5,
+          isActive: true,
+          description: 'A beautiful restaurant in the heart of Central Park',
+          priceRange: 'Moderate',
+          difficulty: 'Easy'
+        },
+        {
+          _id: 2,
+          name: 'Downtown Coffee Shop',
+          category: 'Cafe',
+          location: { city: 'Los Angeles', state: 'CA' },
+          rating: 4.2,
+          isActive: true,
+          description: 'Cozy coffee shop with great atmosphere',
+          priceRange: 'Budget',
+          difficulty: 'Easy'
+        },
+        {
+          _id: 3,
+          name: 'Mountain View Hotel',
+          category: 'Hotel',
+          location: { city: 'Denver', state: 'CO' },
+          rating: 4.7,
+          isActive: false,
+          description: 'Luxury hotel with mountain views',
+          priceRange: 'Expensive',
+          difficulty: 'Easy'
+        }
+      ]);
+    } finally {
+      // Only set loading to false if component is still mounted
+      if (isMountedRef.current) {
+        setLoading(false);
+        setIsLazyLoading(false);
+      }
+    }
+  }, [isAuthenticated, user, pagination.limit, filters, handleAuthError]);
 
   // Component mount effect - ensure initial data fetch
   useEffect(() => {
@@ -261,8 +468,8 @@ const Places = () => {
       previousFiltersRef.current = JSON.stringify(filters);
     }
 
-    // If we already have places, don't fetch
-    if (places.length > 0) {
+    // If we already have places and initial load is complete, don't fetch
+    if (places.length > 0 && hasInitialLoad) {
       return;
     }
 
@@ -270,14 +477,14 @@ const Places = () => {
     if (isAuthenticated && activeView === 'list') {
       fetchPlacesDirect(1);
     }
-  }, [authLoading, isAuthenticated, activeView]); // Removed places.length to prevent re-fetching
+  }, [authLoading, isAuthenticated, activeView, places.length, hasInitialLoad, fetchPlacesDirect, filters]);
 
   // Effect for pagination changes - immediate fetch
   useEffect(() => {
     if (isAuthenticated && activeView === 'list' && !loading && pagination.currentPage > 1) {
       fetchPlacesDirect(pagination.currentPage);
     }
-  }, [pagination.currentPage, isAuthenticated, activeView, loading]);
+  }, [pagination.currentPage, isAuthenticated, activeView, loading, fetchPlacesDirect]);
 
   // Separate effect for filters to prevent unnecessary re-renders
   useEffect(() => {
@@ -326,164 +533,18 @@ const Places = () => {
         fetchPlacesDirect(1);
       }
     }, 1500); // Increased delay to 1.5 seconds to prevent rate limiting
-  }, [filters.search, filters.category, filters.isActive, filters.featured, authLoading, isAuthenticated, activeView, loading]);
+  }, [filters.search, filters.category, filters.isActive, filters.featured, authLoading, isAuthenticated, activeView, loading, fetchPlacesDirect, filters]);
 
-  // Direct fetch function to avoid dependency issues
-  const fetchPlacesDirect = useCallback(async (page = 1) => {
-    try {
-      // Check if component is still mounted
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      // Add a small delay to prevent rapid successive calls
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      setLoading(true);
-      setFilterLoading(false); // Clear filter loading when fetch starts
-      setError(null);
-      setAuthError(null);
-
-      // Check if user is authenticated
-      if (!isAuthenticated || !user) {
-        throw new Error('Authentication required');
-      }
-
-      // Calculate offset based on page
-      const limit = pagination.limit;
-      const offset = (page - 1) * limit;
-
-      // Build query parameters
-      const queryParams = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString()
-      });
-
-      // Get current filters from state (not from closure)
-      const currentFilters = {
-        search: filters.search,
-        category: filters.category,
-        isActive: filters.isActive,
-        featured: filters.featured
-      };
-
-      // Add filters if they're not 'all'
-      if (currentFilters.search) {
-        queryParams.append('search', currentFilters.search);
-      }
-      if (currentFilters.category !== 'all') {
-        queryParams.append('category', currentFilters.category);
-      }
-      if (currentFilters.isActive !== 'all') {
-        queryParams.append('isActive', currentFilters.isActive);
-      }
-      if (currentFilters.featured !== 'all') {
-        queryParams.append('featured', currentFilters.featured);
-      }
-
-      // Get token manually to ensure it's available
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      // Validate token format
-      if (typeof token !== 'string' || token.length < 10) {
-        throw new Error('Invalid token format');
-      }
-
-      // Try using the API service first
-      let response;
-      try {
-        response = await api.get(`/admin/places-list?${queryParams}`);
-      } catch (apiError) {
-        // Fallback: use axios directly with explicit headers
-        const token = localStorage.getItem('token');
-        response = await axios.get(`http://localhost:3030/admin/places-list?${queryParams}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
-
-      if (response.data.success) {
-        // Check if component is still mounted before setting state
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        // Rapid state update for better UX
-        setPlaces(response.data.data.places || []);
-        setPagination(prev => ({
-          ...prev,
-          currentPage: page,
-          totalPages: response.data.data.pagination.totalPages,
-          totalCount: response.data.data.pagination.totalCount,
-          offset: response.data.data.pagination.offset,
-          hasNextPage: response.data.data.pagination.hasNextPage,
-          hasPrevPage: response.data.data.pagination.hasPrevPage
-        }));
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch places');
-      }
-    } catch (error) {
-      console.error('Error fetching places:', error);
-
-      // Check if component is still mounted before setting state
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      // Handle authentication errors
-      if (handleAuthError(error)) {
-        return;
-      }
-
-      setError(error.message || 'Failed to fetch places');
-      // For demo purposes, set some sample data
-      setPlaces([
-        {
-          _id: 1,
-          name: 'Central Park Restaurant',
-          category: 'Restaurant',
-          location: { city: 'New York', state: 'NY' },
-          rating: 4.5,
-          isActive: true,
-          description: 'A beautiful restaurant in the heart of Central Park',
-          priceRange: 'Moderate',
-          difficulty: 'Easy'
-        },
-        {
-          _id: 2,
-          name: 'Downtown Coffee Shop',
-          category: 'Cafe',
-          location: { city: 'Los Angeles', state: 'CA' },
-          rating: 4.2,
-          isActive: true,
-          description: 'Cozy coffee shop with great atmosphere',
-          priceRange: 'Budget',
-          difficulty: 'Easy'
-        },
-        {
-          _id: 3,
-          name: 'Mountain View Hotel',
-          category: 'Hotel',
-          location: { city: 'Denver', state: 'CO' },
-          rating: 4.7,
-          isActive: false,
-          description: 'Luxury hotel with mountain views',
-          priceRange: 'Expensive',
-          difficulty: 'Easy'
-        }
-      ]);
-    } finally {
-      // Only set loading to false if component is still mounted
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+  // Lazy loading function for loading more places
+  const loadMorePlaces = useCallback(async () => {
+    if (!pagination.hasNextPage || isLazyLoading || loading) {
+      return;
     }
-  }, [isAuthenticated, user, pagination.limit]); // Remove filters from dependencies
+    
+    const nextPage = pagination.currentPage + 1;
+    await fetchPlaces(nextPage, true);
+  }, [pagination.hasNextPage, pagination.currentPage, isLazyLoading, loading, fetchPlaces]);
+
 
   // Cleanup effect to prevent API calls when component unmounts
   useEffect(() => {
@@ -495,18 +556,6 @@ const Places = () => {
       }
     };
   }, []);
-
-  // Handle authentication errors
-  const handleAuthError = (error) => {
-    if (error.response?.status === 401) {
-      setAuthError('Your session has expired. Please log in again.');
-      setTimeout(() => {
-        logout();
-      }, 2000);
-      return true;
-    }
-    return false;
-  };
 
   // Memoized callbacks to prevent unnecessary re-renders
   const handleFilterChange = useCallback((filterName, value) => {
@@ -868,7 +917,7 @@ const Places = () => {
 
       setError('Failed to delete place');
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, handleAuthError]);
 
   const openDeleteModal = useCallback((place) => {
     setPlaceToDelete(place);
@@ -920,11 +969,8 @@ const Places = () => {
 
       setError('Failed to update place status');
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, handleAuthError]);
 
-  const handleLogout = useCallback(() => {
-    logout();
-  }, [logout]);
 
   // Callback functions for EditPlace component
   const handleEditSave = useCallback((updatedPlace) => {
@@ -1043,12 +1089,39 @@ const Places = () => {
           </>
         )}
 
-        {/* Pagination - Only show if there are places */}
-        <Pagination
-          pagination={memoizedPagination}
-          onPageChange={handlePageChange}
-          show={memoizedPlaces.length > 0 && memoizedPagination.totalPages > 1}
-        />
+        {/* Pagination and Load More */}
+        {memoizedPlaces.length > 0 && (
+          <div className="pagination-container">
+            {/* Traditional Pagination */}
+            <Pagination
+              pagination={memoizedPagination}
+              onPageChange={handlePageChange}
+              show={memoizedPagination.totalPages > 1}
+            />
+            
+            {/* Load More Button for Lazy Loading */}
+            {memoizedPagination.hasNextPage && (
+              <div className="load-more-container">
+                <button
+                  className="btn btn-load-more"
+                  onClick={loadMorePlaces}
+                  disabled={isLazyLoading}
+                >
+                  {isLazyLoading ? (
+                    <>
+                      <div className="spinner-small"></div>
+                      Loading more places...
+                    </>
+                  ) : (
+                    <>
+                      Load More Places ({memoizedPagination.totalCount - memoizedPlaces.length} remaining)
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </>
     );
   };
@@ -1638,3 +1711,4 @@ const Places = () => {
 };
 
 export default Places;
+
